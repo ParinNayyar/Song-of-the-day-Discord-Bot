@@ -1,24 +1,44 @@
 import os
+import threading
+from flask import Flask
 import discord
 from discord.ext import commands
 from dotenv import load_dotenv
 import spotipy
 from spotipy.oauth2 import SpotifyClientCredentials
 
-# Load environment variables
+# ---------------------------------------------------------
+# Lightweight Web Server for Cloud Hosting Health Checks
+# ---------------------------------------------------------
+app = Flask('')
+
+@app.route('/')
+def home():
+    return "Bot is alive and running!"
+
+def run_web_server():
+    port = int(os.environ.get("PORT", 8080))
+    app.run(host='0.0.0.0', port=port)
+
+def keep_alive():
+    t = threading.Thread(target=run_web_server)
+    t.daemon = True
+    t.start()
+
+# ---------------------------------------------------------
+# Discord Bot Configuration
+# ---------------------------------------------------------
 load_dotenv()
 DISCORD_TOKEN = os.getenv("DISCORD_TOKEN")
 SPOTIFY_CLIENT_ID = os.getenv("SPOTIPY_CLIENT_ID")
 SPOTIFY_CLIENT_SECRET = os.getenv("SPOTIPY_CLIENT_SECRET")
 
-# Initialize Spotify Client
 sp = spotipy.Spotify(
     auth_manager=SpotifyClientCredentials(
         client_id=SPOTIFY_CLIENT_ID, client_secret=SPOTIFY_CLIENT_SECRET
     )
 )
 
-# Initialize Discord Bot (case_insensitive allows !sotd, !SOTD, etc.)
 intents = discord.Intents.default()
 intents.message_content = True
 bot = commands.Bot(command_prefix="!", intents=intents, case_insensitive=True)
@@ -29,7 +49,6 @@ async def on_ready():
 
 @bot.command(name="sotd")
 async def song_of_the_day(ctx, *, query: str):
-    """Submits a Song of the Day via track URL or search term."""
     try:
         results = sp.search(q=query, limit=1, type="track")
         tracks = results.get("tracks", {}).get("items", [])
@@ -41,17 +60,15 @@ async def song_of_the_day(ctx, *, query: str):
         track = tracks[0]
         track_title = track.get("name", "Unknown Title")
         artist_name = ", ".join([a.get("name", "") for a in track.get("artists", [])]) or "Unknown Artist"
-        
-        # Album metadata
+
         album = track.get("album", {})
         album_images = album.get("images", [])
         album_art = album_images[0]["url"] if album_images else ""
         release_date = album.get("release_date", "N/A")
-        
+
         spotify_url = track.get("external_urls", {}).get("spotify", "")
         popularity = track.get("popularity", "N/A")
 
-        # Build Discord Embed
         embed = discord.Embed(
             title=f"🎵 Song of the Day: {track_title}",
             description=f"by **{artist_name}**",
@@ -72,4 +89,6 @@ async def song_of_the_day(ctx, *, query: str):
     except Exception as e:
         await ctx.send(f"An error occurred: {str(e)}")
 
-bot.run(DISCORD_TOKEN)
+if __name__ == "__main__":
+    keep_alive()
+    bot.run(DISCORD_TOKEN)
