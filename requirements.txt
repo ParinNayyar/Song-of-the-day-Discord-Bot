@@ -1,3 +1,5 @@
 discord.py
 spotipy
 python-dotenv
+flask
+gunicorn
